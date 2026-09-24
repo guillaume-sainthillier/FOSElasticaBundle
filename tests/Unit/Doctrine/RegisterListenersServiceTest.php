@@ -17,6 +17,7 @@ use Doctrine\ORM\EntityManagerInterface;
 use Doctrine\Persistence\ObjectManager;
 use FOS\ElasticaBundle\Doctrine\RegisterListenersService;
 use FOS\ElasticaBundle\Persister\Event\PostInsertObjectsEvent;
+use FOS\ElasticaBundle\Persister\Event\PostPersistEvent;
 use FOS\ElasticaBundle\Persister\Event\PreFetchObjectsEvent;
 use FOS\ElasticaBundle\Persister\Event\PreInsertObjectsEvent;
 use FOS\ElasticaBundle\Persister\ObjectPersisterInterface;
@@ -104,6 +105,40 @@ class RegisterListenersServiceTest extends TestCase
         );
     }
 
+    public function testShouldRemoveListenersOncePagerIsPersisted(): void
+    {
+        $dispatcher = $this->createDispatcher();
+
+        $service = new RegisterListenersService($dispatcher);
+
+        $pager = $this->createPagerMock();
+
+        $service->register($this->createObjectManagerMock(), $pager, [
+            'sleep' => 1,
+        ]);
+
+        $dispatcher->dispatch(new PostPersistEvent($pager, $this->createObjectPersisterMock(), []));
+
+        $this->assertSame([], $dispatcher->getListeners(PostInsertObjectsEvent::class));
+        $this->assertSame([], $dispatcher->getListeners(PostPersistEvent::class));
+    }
+
+    public function testShouldKeepListenersUntilTheirPagerIsPersisted(): void
+    {
+        $dispatcher = $this->createDispatcher();
+
+        $service = new RegisterListenersService($dispatcher);
+
+        $pager = $this->createPagerMock();
+
+        $service->register($this->createObjectManagerMock(), $pager, []);
+
+        $dispatcher->dispatch(new PostPersistEvent($this->createPagerMock(), $this->createObjectPersisterMock(), []));
+
+        $this->assertCount(1, $dispatcher->getListeners(PostInsertObjectsEvent::class));
+        $this->assertCount(1, $dispatcher->getListeners(PostPersistEvent::class));
+    }
+
     public function testShouldNotRegisterSleepListenerByDefault(): void
     {
         $dispatcher = $this->createDispatcherMock();
@@ -178,11 +213,12 @@ class RegisterListenersServiceTest extends TestCase
         }
 
         $dispatcher = $this->createDispatcherMock();
-        $dispatcher->expects($this->exactly(2))
+        $dispatcher->expects($this->exactly(3))
             ->method('addListener')
             ->withConsecutive(
                 [PreFetchObjectsEvent::class, $this->isInstanceOf(\Closure::class)],
-                [PreInsertObjectsEvent::class, $this->isInstanceOf(\Closure::class)]
+                [PreInsertObjectsEvent::class, $this->isInstanceOf(\Closure::class)],
+                [PostPersistEvent::class, $this->isInstanceOf(\Closure::class)]
             )
         ;
 

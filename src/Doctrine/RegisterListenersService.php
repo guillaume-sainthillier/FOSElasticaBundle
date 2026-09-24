@@ -15,6 +15,7 @@ use Doctrine\ORM\EntityManagerInterface;
 use Doctrine\Persistence\ObjectManager;
 use FOS\ElasticaBundle\Persister\Event\PersistEvent;
 use FOS\ElasticaBundle\Persister\Event\PostInsertObjectsEvent;
+use FOS\ElasticaBundle\Persister\Event\PostPersistEvent;
 use FOS\ElasticaBundle\Persister\Event\PreFetchObjectsEvent;
 use FOS\ElasticaBundle\Persister\Event\PreInsertObjectsEvent;
 use FOS\ElasticaBundle\Provider\PagerInterface;
@@ -34,14 +35,16 @@ class RegisterListenersService
             'sleep' => 0,
         ], $options);
 
+        $listeners = [];
+
         if ($options['clear_object_manager']) {
-            $this->addListener($pager, PostInsertObjectsEvent::class, function () use ($manager): void {
+            $listeners[] = $this->addListener($pager, PostInsertObjectsEvent::class, function () use ($manager): void {
                 $manager->clear();
             });
         }
 
         if ($options['sleep']) {
-            $this->addListener($pager, PostInsertObjectsEvent::class, function () use ($options): void {
+            $listeners[] = $this->addListener($pager, PostInsertObjectsEvent::class, function () use ($options): void {
                 \usleep($options['sleep']);
             });
         }
@@ -54,25 +57,57 @@ class RegisterListenersService
             if (\method_exists($configuration, 'getSQLLogger') && \method_exists($configuration, 'setSQLLogger')) {
                 $logger = $configuration->getSQLLogger();
 
-                $this->addListener($pager, PreFetchObjectsEvent::class, function () use ($configuration): void {
+                $listeners[] = $this->addListener($pager, PreFetchObjectsEvent::class, function () use ($configuration): void {
                     $configuration->setSQLLogger(null);
                 });
 
-                $this->addListener($pager, PreInsertObjectsEvent::class, function () use ($configuration, $logger): void {
+                $listeners[] = $this->addListener($pager, PreInsertObjectsEvent::class, function () use ($configuration, $logger): void {
                     $configuration->setSQLLogger($logger);
                 });
             }
         }
+
+        if ($listeners) {
+            $this->removeListenersOncePersisted($pager, $listeners);
+        }
     }
 
-    private function addListener(PagerInterface $pager, string $eventName, \Closure $callable): void
+    /**
+     * @return array{string, \Closure}
+     */
+    private function addListener(PagerInterface $pager, string $eventName, \Closure $callable): array
     {
-        $this->dispatcher->addListener($eventName, function (PersistEvent $event) use ($pager, $callable): void {
+        $listener = function (PersistEvent $event) use ($pager, $callable): void {
             if ($event->getPager() !== $pager) {
                 return;
             }
 
             \call_user_func_array($callable, \func_get_args());
+        };
+
+        $this->dispatcher->addListener($eventName, $listener);
+
+        return [$eventName, $listener];
+    }
+
+    /**
+     * Left on the dispatcher, the listeners would keep the pager, and the objects of its current page, in memory:
+     * a Messenger worker handling AsyncPersistPage messages registers them for a new pager with each message.
+     *
+     * @param list<array{string, \Closure}> $listeners
+     */
+    private function removeListenersOncePersisted(PagerInterface $pager, array $listeners): void
+    {
+        $this->dispatcher->addListener(PostPersistEvent::class, $cleanup = function (PostPersistEvent $event) use ($pager, $listeners, &$cleanup): void {
+            if ($event->getPager() !== $pager) {
+                return;
+            }
+
+            foreach ($listeners as [$eventName, $listener]) {
+                $this->dispatcher->removeListener($eventName, $listener);
+            }
+
+            $this->dispatcher->removeListener(PostPersistEvent::class, $cleanup);
         });
     }
 }
