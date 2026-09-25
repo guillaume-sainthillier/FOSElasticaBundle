@@ -14,9 +14,40 @@ Instead of doing everything in one single process the populate command delegates
 Those workers process small parts of the whole job and respond to the populate command with a status or error message.
 The performance gain depends on how much workers (consumers) you run.
 
+## With Symfony Messenger
+
+Enable the [Messenger](https://symfony.com/doc/current/messenger.html) support and route the page messages to a transport:
+
+```yaml
+fos_elastica:
+    messenger: ~ # the bus defaults to messenger.default_bus
+
+framework:
+    messenger:
+        transports:
+            elastica: '%env(MESSENGER_TRANSPORT_DSN)%'
+        routing:
+            FOS\ElasticaBundle\Message\AsyncPersistPage: elastica
+```
+
+The bundle registers the handler, unless your application already has its own handler for
+`FOS\ElasticaBundle\Message\AsyncPersistPage`.
+
+Run some workers, then the populate command with the `async` pager persister. It sends one message per page,
+each worker persisting a page at a time:
+
+```bash
+$ ./bin/console messenger:consume elastica
+$ ./bin/console fos:elastica:populate --pager-persister=async --max-per-page=1000
+```
+
+_**Note:** the command returns once every page is queued, before the workers have persisted them._
+
+## With Enqueue
+
 For queuing it uses [EnqueueBundle](https://github.com/php-enqueue/enqueue-dev/blob/master/docs/bundle/quick_tour.md) which supports a lot of MQ transports out of the box.
 
-## Installation
+### Installation
 
 I assume you already have `FOSElasticaBundle` installed, if not here's the [setup doc](../setup.md). 
 So, we only have to install `EnqueueElasticaBundle` and one of the MQ transports. 
@@ -40,7 +71,7 @@ enqueue_elastica:
 
 _**Note:** As long as you are on Symfony Flex you are done. If not, you have to do some extra things, like registering the bundle in your `AppKernel` class._  
  
-## Usage
+### Usage
 
 * Run some consumers (the more you run the better performance you might get):
 
@@ -60,7 +91,7 @@ $ ./bin/console enqueue:transport:consume enqueue_elastica.populate_processor -v
 $ ./bin/console fos:elastica:populate --pager-persister=queue 
 ```
 
-## Customization
+### Customization
 
 The `QueuePagerPersister` could be customized via options. 
 The options could be customized in a listener subscribed on `FOS\ElasticaBundle\Persister\Event\PrePersistEvent` event for example.
@@ -75,7 +106,7 @@ Here's the list of available options:
 * `reply_receive_timeout` - Float. A time a consumer waits for a message. In milliseconds.  
 * `limit_overall_reply_time` - Int. Limits an overtime allowed processing time. Throws an exception if it is exceeded.
 
-## Advices
+### Advices
 
 * We suggest using [supervisord](https://github.com/php-enqueue/enqueue-dev/blob/master/docs/bundle/production_settings.md) on production to control consumers.
 

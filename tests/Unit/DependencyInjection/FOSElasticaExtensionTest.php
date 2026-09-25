@@ -17,6 +17,7 @@ use FOS\ElasticaBundle\Doctrine\MongoDBPagerProvider;
 use FOS\ElasticaBundle\Doctrine\ORMPagerProvider;
 use FOS\ElasticaBundle\Doctrine\PHPCRPagerProvider;
 use FOS\ElasticaBundle\Doctrine\RegisterListenersService;
+use FOS\ElasticaBundle\Message\Handler\AsyncPersistPageHandler;
 use FOS\ElasticaBundle\Persister\InPlacePagerPersister;
 use FOS\ElasticaBundle\Persister\Listener\FilterObjectsListener;
 use FOS\ElasticaBundle\Persister\PagerPersisterRegistry;
@@ -518,6 +519,25 @@ class FOSElasticaExtensionTest extends TestCase
         );
 
         $this->assertFalse($container->hasDefinition('fos_elastica.listener.acme_index'));
+    }
+
+    public function testShouldRegisterAsyncPersistPageHandlerWithMessenger(): void
+    {
+        $container = new ContainerBuilder();
+        $container->setParameter('kernel.debug', true);
+
+        $extension = new FOSElasticaExtension();
+        $extension->load([
+            'fos_elastica' => [
+                'clients' => ['default' => ['hosts' => ['a_host:a_port']]],
+                'messenger' => null,
+                'indexes' => ['acme_index' => ['properties' => ['text' => null]]],
+            ],
+        ], $container);
+
+        $handler = $container->getDefinition(AsyncPersistPageHandler::class);
+        $this->assertEquals([new Reference('fos_elastica.async_pager_persister')], $handler->getArguments());
+        $this->assertTrue($handler->hasTag('messenger.message_handler'));
     }
 
     public function testIndexTemplates(): void
