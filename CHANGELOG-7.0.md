@@ -6,6 +6,9 @@ in 7.x versions.
 
 ### 7.2.1 (2026-xx-xx)
 * Added priority flag for index templates.
+* Tagged the clients, `fos_elastica.logger` and `fos_elastica.data_collector` with `kernel.reset` so their state is cleared between requests in long-running processes (FrankenPHP, RoadRunner, Messenger workers).
+* `ElasticaLogger` now implements `ResetInterface`.
+* `Client::reset()` no longer detaches the stopwatch, so profiling keeps working after a reset.
 
 ### 7.2.0 (2026-06-01)
 * Added Elasticsearch 9 and Elastica 9 support.

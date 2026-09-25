@@ -58,6 +58,7 @@ return static function (ContainerConfigurator $container): void {
     $services->set('fos_elastica.data_collector', ElasticaDataCollector::class)
         ->tag('data_collector', ['template' => '@FOSElastica/Collector/elastica.html.twig', 'id' => 'elastica'])
         ->args([service('fos_elastica.logger')])
+        ->tag('kernel.reset', ['method' => 'reset'])
     ;
 
     $services->set('fos_elastica.paginator.subscriber', PaginateElasticaQuerySubscriber::class)
@@ -71,6 +72,7 @@ return static function (ContainerConfigurator $container): void {
             param('kernel.debug'),
         ])
         ->tag('monolog.logger', ['channel' => 'elastica'])
+        ->tag('kernel.reset', ['method' => 'reset'])
     ;
 
     $services->set('fos_elastica.mapping_builder', MappingBuilder::class)

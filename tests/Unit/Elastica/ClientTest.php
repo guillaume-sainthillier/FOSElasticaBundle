@@ -25,6 +25,7 @@ use PHPUnit\Framework\TestCase;
 use Psr\Http\Client\ClientInterface;
 use Psr\Log\LoggerInterface;
 use Symfony\Component\EventDispatcher\EventDispatcherInterface;
+use Symfony\Component\Stopwatch\Stopwatch;
 
 /**
  * @internal
@@ -232,6 +233,34 @@ class ClientTest extends TestCase
         $client = new Client();
         $template = $client->getIndexTemplate('some_index');
         $this->assertSame($template, $client->getIndexTemplate('some_index'));
+    }
+
+    /**
+     * The client is tagged with kernel.reset, so reset() runs between requests in long-running
+     * processes. It must clear the caches without detaching the stopwatch, which Symfony resets itself.
+     */
+    public function testResetClearsCachesButKeepsStopwatch(): void
+    {
+        $response = new \Nyholm\Psr7\Response(
+            200,
+            ['Content-Type' => 'application/json', Elasticsearch::HEADER_CHECK => Elasticsearch::PRODUCT_NAME],
+            \json_encode(['foo' => 'bar'], \JSON_THROW_ON_ERROR)
+        );
+        $client = $this->getClient($this->createMock(LoggerInterface::class), $response);
+        $stopwatch = new Stopwatch();
+        $client->setStopwatch($stopwatch);
+
+        $index = $client->getIndex('some_index');
+        $template = $client->getIndexTemplate('some_index');
+
+        $client->reset();
+
+        $this->assertNotSame($index, $client->getIndex('some_index'));
+        $this->assertNotSame($template, $client->getIndexTemplate('some_index'));
+
+        $client->sendRequest(new \Nyholm\Psr7\Request('GET', 'https://some.tld/foo'));
+
+        $this->assertCount(1, $stopwatch->getEvent('es_request')->getPeriods());
     }
 
     /**

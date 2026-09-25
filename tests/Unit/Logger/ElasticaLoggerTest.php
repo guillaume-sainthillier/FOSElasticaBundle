@@ -14,6 +14,7 @@ namespace FOS\ElasticaBundle\Tests\Unit\Logger;
 use FOS\ElasticaBundle\Logger\ElasticaLogger;
 use PHPUnit\Framework\TestCase;
 use Psr\Log\LoggerInterface;
+use Symfony\Contracts\Service\ResetInterface;
 
 /**
  * @author Richard Miller <info@limethinking.co.uk>
@@ -173,6 +174,20 @@ class ElasticaLoggerTest extends TestCase
         $elasticaLogger->logQuery('path', 'method', $data, 0);
         $this->assertCount(1, $elasticaLogger->getQueries()[0]['data']);
         $this->assertEquals(['foo' => 'bar'], $elasticaLogger->getQueries()[0]['data'][0]);
+    }
+
+    public function testResetClearsLoggedQueries(): void
+    {
+        $elasticaLogger = new ElasticaLogger(null, true);
+        $this->assertInstanceOf(ResetInterface::class, $elasticaLogger);
+
+        $elasticaLogger->logQuery('path', 'method', ['foo' => 'bar'], 0);
+        $this->assertSame(1, $elasticaLogger->getNbQueries());
+
+        $elasticaLogger->reset();
+
+        $this->assertSame(0, $elasticaLogger->getNbQueries());
+        $this->assertSame([], $elasticaLogger->getQueries());
     }
 
     /**

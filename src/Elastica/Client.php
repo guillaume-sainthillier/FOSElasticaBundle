@@ -194,7 +194,6 @@ class Client extends BaseClient implements ResetInterface
     {
         $this->indexCache = [];
         $this->indexTemplateCache = [];
-        $this->stopwatch = null;
     }
 
     /**

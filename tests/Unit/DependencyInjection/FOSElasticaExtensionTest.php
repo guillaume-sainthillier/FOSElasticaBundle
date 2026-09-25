@@ -563,6 +563,36 @@ class FOSElasticaExtensionTest extends TestCase
         $this->assertTrue($container->hasDefinition('fos_elastica.index_template.some_index_template'));
     }
 
+    public function testStatefulServicesAreTaggedForKernelReset(): void
+    {
+        $container = new ContainerBuilder();
+        $container->setParameter('kernel.debug', true);
+
+        $extension = new FOSElasticaExtension();
+        $extension->load(
+            [
+                'fos_elastica' => [
+                    'clients' => [
+                        'default' => ['hosts' => ['a_host:a_port']],
+                        'secondary' => ['hosts' => ['another_host:a_port']],
+                    ],
+                    'indexes' => [
+                        'some_index' => [],
+                    ],
+                ],
+            ],
+            $container
+        );
+
+        foreach (['fos_elastica.client.default', 'fos_elastica.client.secondary', 'fos_elastica.logger', 'fos_elastica.data_collector'] as $serviceId) {
+            $this->assertSame(
+                [['method' => 'reset']],
+                $container->getDefinition($serviceId)->getTag('kernel.reset'),
+                \sprintf('Service "%s" should be tagged with "kernel.reset".', $serviceId)
+            );
+        }
+    }
+
     public function testShouldRegisterCustomRepositoryAsService()
     {
         $container = new ContainerBuilder();
