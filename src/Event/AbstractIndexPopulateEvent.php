@@ -25,6 +25,7 @@ namespace FOS\ElasticaBundle\Event;
  *     max_per_page: int,
  *     last_page?: int,
  *     indexName?: string,
+ *     target_index_name?: string,
  *     pager_persister: string
  * }
  */

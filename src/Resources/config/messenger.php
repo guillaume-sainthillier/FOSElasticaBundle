@@ -22,6 +22,7 @@ return static function (ContainerConfigurator $container): void {
             service('fos_elastica.pager_persister_registry'),
             service('fos_elastica.pager_provider_registry'),
             service('fos_elastica.messenger.bus'),
+            service('fos_elastica.index_manager'),
         ])
         ->tag('fos_elastica.pager_persister', ['persisterName' => 'async'])
     ;

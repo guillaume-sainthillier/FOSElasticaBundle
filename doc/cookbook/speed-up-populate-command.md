@@ -41,7 +41,9 @@ $ ./bin/console messenger:consume elastica
 $ ./bin/console fos:elastica:populate --pager-persister=async --max-per-page=1000
 ```
 
-_**Note:** the command returns once every page is queued, before the workers have persisted them._
+_**Note:** the command returns once every page is queued, and finishes the populate right away: with `use_alias`,
+the alias switches to the new index while the workers are still filling it. Wait for the queue to be consumed before
+relying on the index._
 
 ## With Enqueue
 

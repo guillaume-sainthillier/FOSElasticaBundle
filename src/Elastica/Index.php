@@ -45,4 +45,15 @@ class Index extends BaseIndex
         $this->originalName = $this->_name;
         $this->_name = $name;
     }
+
+    /**
+     * Reverts {@see overrideName()}.
+     */
+    public function restoreName(): void
+    {
+        if (null !== $this->originalName) {
+            $this->_name = $this->originalName;
+            $this->originalName = null;
+        }
+    }
 }
