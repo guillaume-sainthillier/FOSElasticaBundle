@@ -325,6 +325,34 @@ fos_elastica:
                     defer: true
 ```
 
+### Index update from a Messenger worker
+
+To take Elasticsearch out of the request entirely, the listener can send the changes to
+[Symfony Messenger](https://symfony.com/doc/current/messenger.html) instead. Only the identifiers
+are sent: a worker reloads the objects and indexes their state at that time, skipping the ones
+removed or no longer indexable since.
+
+```yaml
+fos_elastica:
+    messenger: ~ # the bus defaults to messenger.default_bus
+    indexes:
+        user:
+            persistence:
+                listener:
+                    async: true
+
+framework:
+    messenger:
+        routing:
+            FOS\ElasticaBundle\Message\AsyncInsertObjects: async
+            FOS\ElasticaBundle\Message\AsyncReplaceObjects: async
+            FOS\ElasticaBundle\Message\AsyncDeleteObjects: async
+```
+
+The messages are sent on `postFlush`. A flush wrapped in a wider transaction is not committed yet
+at that point, so a worker could miss the new rows: flush outside explicit transactions, or hold
+the messages back until the commit.
+
 Logging Errors
 --------------
 

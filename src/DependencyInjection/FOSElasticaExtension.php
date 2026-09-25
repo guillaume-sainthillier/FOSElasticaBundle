@@ -73,6 +73,13 @@ class FOSElasticaExtension extends Extension
      */
     private $customRepositories = [];
 
+    /**
+     * What the async persist handler needs to reload the objects, keyed by index name.
+     *
+     * @var array<string, array{registry: Reference, model: string, identifier: string}>
+     */
+    private array $asyncListenerIndexes = [];
+
     public function load(array $configs, ContainerBuilder $container): void
     {
         $configuration = $this->getConfiguration($configs, $container);
@@ -121,6 +128,9 @@ class FOSElasticaExtension extends Extension
         ;
 
         $this->loadIndexes($config['indexes'], $container);
+        if ($container->hasDefinition('fos_elastica.async_persist_objects_handler')) {
+            $container->getDefinition('fos_elastica.async_persist_objects_handler')->replaceArgument(2, $this->asyncListenerIndexes);
+        }
         $container->setAlias('fos_elastica.index', \sprintf('fos_elastica.index.%s', $config['default_index']))
             ->setPublic(false)
         ;
@@ -614,7 +624,7 @@ class FOSElasticaExtension extends Extension
         $abstractListenerId = \sprintf('fos_elastica.listener.prototype.%s', $indexConfig['driver']);
         $listenerId = \sprintf('fos_elastica.listener.%s', $indexName);
         $listenerDef = new ChildDefinition($abstractListenerId);
-        $listenerDef->replaceArgument(0, new Reference($objectPersisterId));
+        $listenerDef->replaceArgument(0, new Reference($indexConfig['listener']['async'] ? $this->loadAsyncObjectPersister($indexConfig, $container, $objectPersisterId, $indexName) : $objectPersisterId));
         $listenerDef->replaceArgument(3, $indexConfig['listener']['logger'] ? new Reference($indexConfig['listener']['logger']) : null);
         $listenerConfig = [
             'identifier' => $indexConfig['identifier'],
@@ -657,6 +667,36 @@ class FOSElasticaExtension extends Extension
         $container->setDefinition($listenerId, $listenerDef);
 
         return $listenerId;
+    }
+
+    /**
+     * Creates the persister that sends the listener's changes to Messenger.
+     */
+    private function loadAsyncObjectPersister(array $indexConfig, ContainerBuilder $container, string $objectPersisterId, string $indexName): string
+    {
+        if (!$container->hasDefinition('fos_elastica.async_persist_objects_handler')) {
+            throw new \LogicException(\sprintf('The async listener of index "%s" requires Messenger support: enable "fos_elastica.messenger".', $indexName));
+        }
+
+        $persisterId = \sprintf('fos_elastica.async_object_persister.%s', $indexName);
+        $persisterDef = new ChildDefinition('fos_elastica.async_object_persister.prototype');
+        $persisterDef->replaceArgument(0, new Reference($objectPersisterId));
+        $persisterDef->replaceArgument(2, $indexName);
+        $persisterDef->replaceArgument(3, $indexConfig['identifier']);
+        $container->setDefinition($persisterId, $persisterDef);
+
+        $this->asyncListenerIndexes[$indexName] = [
+            'registry' => new Reference(match ($indexConfig['driver']) {
+                'orm' => 'doctrine',
+                'mongodb' => 'doctrine_mongodb',
+                'phpcr' => 'doctrine_phpcr',
+                default => throw new \InvalidArgumentException(\sprintf('The async listener does not support driver "%s".', $indexConfig['driver'])),
+            }),
+            'model' => $indexConfig['model'],
+            'identifier' => $indexConfig['identifier'],
+        ];
+
+        return $persisterId;
     }
 
     /**

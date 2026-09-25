@@ -27,6 +27,7 @@ use Symfony\Component\DependencyInjection\ChildDefinition;
 use Symfony\Component\DependencyInjection\ContainerBuilder;
 use Symfony\Component\DependencyInjection\Definition;
 use Symfony\Component\DependencyInjection\Loader\YamlFileLoader;
+use Symfony\Component\DependencyInjection\ParameterBag\ParameterBag;
 use Symfony\Component\DependencyInjection\Reference;
 use Symfony\Component\DependencyInjection\ServiceLocator;
 use Symfony\Component\Yaml\Yaml;
@@ -520,6 +521,39 @@ class FOSElasticaExtensionTest extends TestCase
         $this->assertFalse($container->hasDefinition('fos_elastica.listener.acme_index'));
     }
 
+    public function testShouldRegisterAsyncDoctrineORMListener(): void
+    {
+        $container = new ContainerBuilder();
+        $container->setParameter('kernel.debug', true);
+
+        $extension = new FOSElasticaExtension();
+        $extension->load([$this->getAsyncListenerConfig(true)], $container);
+
+        $listener = $container->getDefinition('fos_elastica.listener.acme_index');
+        $this->assertEquals(new Reference('fos_elastica.async_object_persister.acme_index'), $listener->getArgument(0));
+
+        $persister = $container->getDefinition('fos_elastica.async_object_persister.acme_index');
+        $this->assertEquals(new Reference('fos_elastica.object_persister.acme_index'), $persister->getArgument(0));
+        $this->assertSame('acme_index', $persister->getArgument(2));
+        $this->assertSame('id', $persister->getArgument(3));
+        $this->assertFalse($persister->hasTag('fos_elastica.persister'));
+
+        $handler = $container->getDefinition('fos_elastica.async_persist_objects_handler');
+        $this->assertEquals([
+            'acme_index' => ['registry' => new Reference('doctrine'), 'model' => 'theModelClass', 'identifier' => 'id'],
+        ], $handler->getArgument(2));
+        $this->assertCount(3, $handler->getTag('messenger.message_handler'));
+    }
+
+    public function testShouldRequireMessengerForAsyncListener(): void
+    {
+        $this->expectException(\LogicException::class);
+        $this->expectExceptionMessage('The async listener of index "acme_index" requires Messenger support');
+
+        $extension = new FOSElasticaExtension();
+        $extension->load([$this->getAsyncListenerConfig(false)], new ContainerBuilder(new ParameterBag(['kernel.debug' => true])));
+    }
+
     public function testIndexTemplates(): void
     {
         $container = new ContainerBuilder();
@@ -655,5 +689,25 @@ class FOSElasticaExtensionTest extends TestCase
         $this->assertInstanceOf(Definition::class, $locatorDefinition);
         $locatorArguments = $locatorDefinition->getArguments();
         $this->assertEmpty($locatorArguments[0]);
+    }
+
+    private function getAsyncListenerConfig(bool $messenger): array
+    {
+        return [
+            'clients' => [
+                'default' => ['hosts' => ['a_host:a_port']],
+            ],
+            'messenger' => ['enabled' => $messenger],
+            'indexes' => [
+                'acme_index' => [
+                    'persistence' => [
+                        'driver' => 'orm',
+                        'model' => 'theModelClass',
+                        'listener' => ['async' => true],
+                    ],
+                    'properties' => ['text' => null],
+                ],
+            ],
+        ];
     }
 }

@@ -1,5 +1,7 @@
 # Doctrine queue listener
 
+_**Note:** the listener can also use Symfony Messenger without any extra bundle, see [Index update from a Messenger worker](../indexes.md#index-update-from-a-messenger-worker)._
+
 FOSElasticaBundle subscribes on Doctrine events, such as insert, update, remove to adjust the index accordingly.
 The listener might start consuming more and more resources, most importantly time of http response.
 Or, Sometimes it fails, bringing the whole your app down too, because of Elasticsearch server is out of order or some bug in the code.
