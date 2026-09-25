@@ -244,6 +244,26 @@ fos_elastica:
                     batch_size: 10
 ```
 
+### Paging by identifier ranges
+
+The Doctrine ORM provider pages with offsets: each page reads and skips every row before it, so the
+populate slows down as it goes on large tables. With a single integer identifier, it can page by blocks
+of identifiers instead: page N holds the rows whose identifier is in `](N - 1) * size, N * size]`,
+a primary key range scan that costs the same on every page.
+
+```yaml
+fos_elastica:
+    indexes:
+        user:
+            persistence:
+                provider:
+                    pagination_mode: id_range # default: offset
+```
+
+A page holds at most `--max-per-page` rows: fewer, or none, where identifiers are missing, so it suits
+auto-incremented identifiers. The pages are in identifier order, and rows created during the populate
+above its last page are left to the listener.
+
 ### Changing the document identifier
 
 By default, ElasticaBundle will use the `id` field of your entities as

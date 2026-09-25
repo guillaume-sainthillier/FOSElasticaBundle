@@ -12,6 +12,7 @@
 namespace FOS\ElasticaBundle\DependencyInjection;
 
 use Elastic\Elasticsearch\Transport\RequestOptions;
+use FOS\ElasticaBundle\Doctrine\ORM\PaginationMode;
 use FOS\ElasticaBundle\Serializer\Callback as SerializerCallback;
 use Symfony\Component\Config\Definition\Builder\ArrayNodeDefinition;
 use Symfony\Component\Config\Definition\Builder\TreeBuilder;
@@ -208,6 +209,10 @@ class Configuration implements ConfigurationInterface
                             ->treatNullLike(true)
                         ->end()
                         ->scalarNode('query_builder_method')->defaultValue('createQueryBuilder')->end()
+                        ->enumNode('pagination_mode')
+                            ->info('"id_range" pages by blocks of identifiers instead of offsets (ORM, single integer identifier)')
+                            ->values(\array_map(static fn (PaginationMode $mode): string => $mode->value, PaginationMode::cases()))
+                        ->end()
                         ->scalarNode('locale')->end()
                         ->scalarNode('service')->end()
                     ->end()

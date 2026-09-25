@@ -520,6 +520,31 @@ class FOSElasticaExtensionTest extends TestCase
         $this->assertFalse($container->hasDefinition('fos_elastica.listener.acme_index'));
     }
 
+    public function testShouldOnlyPageByIdRangeWithOrm(): void
+    {
+        $this->expectException(\InvalidArgumentException::class);
+        $this->expectExceptionMessage('The "id_range" pagination mode of index "acme_index" is only supported by the "orm" driver.');
+
+        $container = new ContainerBuilder();
+        $container->setParameter('kernel.debug', true);
+
+        (new FOSElasticaExtension())->load([
+            'fos_elastica' => [
+                'clients' => ['default' => ['hosts' => ['a_host:a_port']]],
+                'indexes' => [
+                    'acme_index' => [
+                        'persistence' => [
+                            'driver' => 'mongodb',
+                            'model' => 'theModelClass',
+                            'provider' => ['pagination_mode' => 'id_range'],
+                        ],
+                        'properties' => ['text' => null],
+                    ],
+                ],
+            ],
+        ], $container);
+    }
+
     public function testIndexTemplates(): void
     {
         $container = new ContainerBuilder();

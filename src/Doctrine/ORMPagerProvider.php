@@ -14,6 +14,9 @@ namespace FOS\ElasticaBundle\Doctrine;
 use Doctrine\ORM\Query\Expr\From;
 use Doctrine\ORM\QueryBuilder;
 use Doctrine\Persistence\ManagerRegistry;
+use Doctrine\Persistence\ObjectManager;
+use FOS\ElasticaBundle\Doctrine\ORM\IdRangePager;
+use FOS\ElasticaBundle\Doctrine\ORM\PaginationMode;
 use FOS\ElasticaBundle\Provider\PagerfantaPager;
 use FOS\ElasticaBundle\Provider\PagerInterface;
 use FOS\ElasticaBundle\Provider\PagerProviderInterface;
@@ -37,6 +40,19 @@ final class ORMPagerProvider implements PagerProviderInterface
 
         $qb = \call_user_func([$repository, $options['query_builder_method']], self::ENTITY_ALIAS);
 
+        $paginationMode = PaginationMode::from($options['pagination_mode'] ?? PaginationMode::Offset->value);
+        $pager = match ($paginationMode) {
+            PaginationMode::Offset => $this->createOffsetPager($qb, $manager),
+            PaginationMode::IdRange => $this->createIdRangePager($qb, $manager, $options['query_builder_method']),
+        };
+
+        $this->registerListenersService->register($manager, $pager, $options);
+
+        return $pager;
+    }
+
+    private function createOffsetPager(mixed $qb, ObjectManager $manager): PagerfantaPager
+    {
         // Ensure that the query builder has a sorting configured. Without a ORDER BY clause, the SQL standard does not
         // guarantee any order, which breaks the pagination (second page might use a different sorting that when retrieving
         // the first page).
@@ -60,10 +76,21 @@ final class ORMPagerProvider implements PagerProviderInterface
             }
         }
 
-        $pager = new PagerfantaPager(new Pagerfanta(new QueryAdapter($qb)));
+        return new PagerfantaPager(new Pagerfanta(new QueryAdapter($qb)));
+    }
 
-        $this->registerListenersService->register($manager, $pager, $options);
+    private function createIdRangePager(mixed $qb, ObjectManager $manager, string $queryBuilderMethod): IdRangePager
+    {
+        if (!$qb instanceof QueryBuilder) {
+            throw new \InvalidArgumentException(\sprintf('The "id_range" pagination mode of "%s" needs "%s()" to return a QueryBuilder.', $this->objectClass, $queryBuilderMethod));
+        }
 
-        return $pager;
+        $metadata = $manager->getClassMetadata($this->objectClass);
+        $identifiers = $metadata->getIdentifierFieldNames();
+        if (1 !== \count($identifiers) || !\in_array($metadata->getTypeOfField($identifiers[0]), ['integer', 'smallint', 'bigint'], true)) {
+            throw new \InvalidArgumentException(\sprintf('The "id_range" pagination mode of "%s" needs a single integer identifier.', $this->objectClass));
+        }
+
+        return new IdRangePager($qb, $qb->getRootAliases()[0].'.'.$identifiers[0]);
     }
 }

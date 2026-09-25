@@ -6,6 +6,7 @@ in 7.x versions.
 
 ### 7.2.1 (2026-xx-xx)
 * Added priority flag for index templates.
+* Added the `id_range` pagination mode to the Doctrine ORM provider: pages by blocks of identifiers instead of offsets.
 
 ### 7.2.0 (2026-06-01)
 * Added Elasticsearch 9 and Elastica 9 support.

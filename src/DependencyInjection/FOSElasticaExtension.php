@@ -12,6 +12,7 @@
 namespace FOS\ElasticaBundle\DependencyInjection;
 
 use Elastica\Client as ElasticaClient;
+use FOS\ElasticaBundle\Doctrine\ORM\PaginationMode;
 use FOS\ElasticaBundle\Elastica\Client;
 use FOS\ElasticaBundle\Elastica\Index;
 use FOS\ElasticaBundle\Elastica\NodePool\RoundRobinNoResurrect;
@@ -575,6 +576,9 @@ class FOSElasticaExtension extends Extension
         unset($baseConfig['service']);
 
         $driver = $indexConfig['driver'];
+        if (PaginationMode::IdRange->value === ($baseConfig['pagination_mode'] ?? null) && 'orm' !== $driver) {
+            throw new \InvalidArgumentException(\sprintf('The "id_range" pagination mode of index "%s" is only supported by the "orm" driver.', $indexName));
+        }
 
         switch ($driver) {
             case 'orm':
